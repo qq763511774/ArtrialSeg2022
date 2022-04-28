@@ -1,6 +1,6 @@
 _*input*_: 100 LGE MRI data with ground truth labels. 
     The original resolution of these data is 0.625*0.625*0.625 mm3
-    47 of them are with 576*576*88 voxels and 53 of them are with 640*640*88 voxels,
+    47 of them are with 576*576*88 voxels and 53 of them are with 640*640*88 voxels, -> 576*576*44
 1. estimate a fixed size of region that covers the whole artiral
 2. cropping the volume according to the estimate:
     origin -> 576*576*96
