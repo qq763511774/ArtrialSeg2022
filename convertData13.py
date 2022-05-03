@@ -1,3 +1,4 @@
+# 在net1确定了mask大致位置过后，对volume进行切分（240,160,96)
 import os
 import AtriaSeg2018
 import numpy as np
