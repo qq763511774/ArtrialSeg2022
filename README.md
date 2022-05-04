@@ -1,4 +1,4 @@
-##2018 Atrial Segmentation Challenge
+## 2018 Atrial Segmentation Challenge
 
 http://atriaseg2018.cardiacatlas.org/
 
