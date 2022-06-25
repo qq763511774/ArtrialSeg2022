@@ -35,7 +35,7 @@ device = torch.device("cuda" if use_cuda else "cpu")
 fold_K = 1
 
 # number of processors for data processing
-num_workers = 4
+num_workers = 8
 
 # training epochs
 epochs = 200
@@ -50,7 +50,8 @@ train_mode = 2
 seed = 0
 
 # input data dir
-data_dir = 'E:/Datasets/AtriaSeg/task2/train_data'
+# data_dir = 'D:/Datasets/AtriaSeg/task2/train_data'
+data_dir = './task2/train_data'
 
 # output dir
 output_dir = 'Out1'
@@ -268,10 +269,12 @@ def main():
     np.random.seed(seed)
     torch.manual_seed(seed)
 
+    model = ResVNet.ResVNet8()
+#    model = DenseVNet.DenseNet_FullVNet()
+
     print('Using', torch.cuda.device_count(), 'GPU(s).')
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-    model = ResVNet.ResVNet8().cuda()
-#    model = DenseVNet.DenseNet_FullVNet().cuda()
+    model = nn.DataParallel(model)
+    model = model.to(device)
 
     model.apply(AtriaSeg2022.weights_init)
 

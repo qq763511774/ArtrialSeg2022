@@ -9,7 +9,7 @@ import time
 import random
 import torch.nn.functional as F
 import ResVNet
-import AtriaSeg2018
+import AtriaSeg2022
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -30,15 +30,15 @@ device = torch.device("cuda" if use_cuda else "cpu")
 # ----------Parameters-------------
 
 # k-fold data set validation
-fold_K = 3
+fold_K = 1
 
 # number of processors for data processing
-num_workers = 8
+num_workers = 4
 
-# training epochs
+# training epochs 
 epochs = 200
 
-# mini-batch size, net1->4, net2->1, as described in the paper
+# mini-batch size, net1->4, net2->1, as described in the paper 
 batch_size = 1
 
 # train which net, 1->net1 (target localization), 2->net2 (atrial segmentation)
@@ -48,10 +48,13 @@ train_mode = 2
 seed = 0
 
 # input data dir
-data_dir = 'Training Set 100'
+data_dir = 'D:/Datasets/AtriaSeg/task2/train_data'
+
+# model 1 dir
+pretrained_model_dir = './Out1/vnet-mode1-fold1.ckpt'
 
 # output dir
-output_dir = 'Out'
+output_dir = 'Out1'
 
 # use data augmentation
 is_use_daug = True
@@ -59,27 +62,30 @@ is_use_daug = True
 # intensity normalization & histogram equalization for input
 is_use_normalization = True
 
-is_output_train_images = False
-is_output_test_images = False
+is_output_train_images = True
+is_output_test_images = True
 
 # --------------------------------
 
 # get all full paths of folders under data_dir
-All_paths = AtriaSeg2018.get_all_paths(data_dir)
+All_paths = AtriaSeg2022.get_all_paths(data_dir)
 
-idxs = [31, 22, 50, 41, 39, 78, 37,  8, 16, 15, 28, 17, 38, 25, 45, 90, 96, 40,  2, 21, 35, 12,  5, 76, 73,
-        26, 72, 91, 85, 54, 57, 30, 82, 53, 27, 18, 83, 66, 32, 86, 87, 84, 64,  9,  0, 68, 52, 62, 99, 24,
-         3, 79, 14, 69, 59, 48, 34, 47,  6, 13, 80, 20, 46, 65,  4, 97, 56, 95, 92, 67, 44, 49, 58,  1, 42,
-        11, 43, 71, 89, 29, 33, 81, 63, 98, 51, 75, 23, 93,  7, 60, 94, 55, 77, 88, 74, 10, 61, 36, 70, 19]
+idxs = [82, 44, 19, 54, 62, 77, 11, 53, 8, 16, 23, 55, 98, 101, 51, 89, 105, 116, 83, 9,
+        104, 125, 22, 30, 34, 117, 2, 90, 78, 84, 113, 118, 76, 66, 71, 107, 73, 80, 21, 
+        121, 14, 86, 129, 127, 81, 18, 60, 24, 70, 25, 52, 68, 50, 95, 94, 57, 120, 35, 
+        31, 96, 128, 15, 40, 111, 13, 103, 32, 92, 97, 75, 114, 69, 63, 12, 108, 87, 122,
+        28, 33, 126, 72, 79, 29, 38, 74, 10, 20, 61, 39, 109, 64, 37, 56, 43, 124, 45,
+        41, 48, 1, 7, 85, 6, 100, 27, 106, 93, 67, 17, 115, 26, 119, 65, 99, 3, 91, 42,
+        0, 110, 49, 5, 47, 102, 123, 112, 58, 46, 59, 88, 4, 36]
 
 sorted_paths = np.array(All_paths)[idxs]
 
 test_idxs = []
-test_idxs.append([1, 6, 13, 19, 23, 29, 33, 35, 44, 48, 53, 55, 60, 66, 72, 77, 84, 86, 93, 98])
-test_idxs.append([3, 9, 10, 17, 20, 27, 30, 37, 40, 49, 52, 56, 63, 65, 70, 78, 82, 88, 94, 96])
-test_idxs.append([2, 7, 11, 16, 21, 26, 32, 38, 42, 45, 51, 59, 61, 69, 74, 75, 83, 85, 90, 97])
-test_idxs.append([0, 5, 14, 15, 22, 28, 34, 39, 43, 46, 50, 57, 62, 67, 71, 76, 80, 89, 92, 99])
-test_idxs.append([4, 8, 12, 18, 24, 25, 31, 36, 41, 47, 54, 58, 64, 68, 73, 79, 81, 87, 91, 95])
+test_idxs.append([2, 8, 13, 17, 20,  28, 32, 36, 41, 46,  50, 55, 61, 65, 73,  78, 84, 89, 90, 99,  101, 108, 111, 115, 120, 129]) # 1折的验证顺序
+test_idxs.append([1, 7, 12, 16, 23, 26, 34, 38, 43, 48, 53, 58, 62, 66, 72, 76, 83, 86, 91, 96, 100, 107, 114, 117, 124, 126]) # 2折的验证顺序
+test_idxs.append([3, 5, 11, 18, 24, 27, 31, 37, 44, 47, 52, 56, 63, 67, 71, 75, 81, 87, 94, 97, 103, 105, 112, 118, 122, 127]) # 3折的验证顺序
+test_idxs.append([4, 6, 10, 15, 21, 29, 33, 39, 42, 49, 54, 57, 60, 69, 74, 77, 80, 85, 93, 98, 104, 106, 110, 119, 123, 125]) # 4折的验证顺序 
+test_idxs.append([0, 9, 14, 19, 22, 25, 30, 35, 40, 45, 51, 59, 64, 68, 70, 79, 82, 88, 92, 95, 102, 109, 113, 116, 121, 128]) # 5折的验证顺序
 
 test_paths = sorted_paths[test_idxs[fold_K]]
 train_paths = list(set(sorted_paths).difference(test_paths))
@@ -128,7 +134,7 @@ def train(epoch, model, train_loader, optimizer, fwriter):
 
         output = model(data)
 
-        loss = AtriaSeg2018.dice_loss(output, target)
+        loss = AtriaSeg2022.dice_loss(output, target)
 
         optimizer.zero_grad()
         loss.backward()
@@ -137,7 +143,7 @@ def train(epoch, model, train_loader, optimizer, fwriter):
         output = output.view(-1, fixed_size[0], fixed_size[1], fixed_size[2], 2)
         target = target.view(-1, fixed_size[0], fixed_size[1], fixed_size[2])
 
-        dice = AtriaSeg2018.dice_coeff(output, target)
+        dice = AtriaSeg2022.dice_coeff(output, target)
 
         n_processed += len(data)
 
@@ -155,9 +161,9 @@ def test(epoch, model, test_loader, fwriter):
     loss = 0
     dice = 0
     model.eval()
-    for m in model.modules():
-        if isinstance(m, nn.BatchNorm3d):
-            m.track_running_stats = False
+    # for m in model.modules():
+    #     if isinstance(m, nn.BatchNorm3d):
+    #         m.track_running_stats = False
 
     with torch.no_grad():
         for i, (data, target) in enumerate(test_loader):
@@ -167,12 +173,12 @@ def test(epoch, model, test_loader, fwriter):
 
             output = model(data)
 
-            loss += AtriaSeg2018.dice_loss(output, target).item()
+            loss += AtriaSeg2022.dice_loss(output, target).item()
 
             output = output.view(-1, fixed_size[0], fixed_size[1], fixed_size[2], 2)
             target = target.view(-1, fixed_size[0], fixed_size[1], fixed_size[2])
 
-            dice += AtriaSeg2018.dice_coeff(output, target).item()
+            dice += AtriaSeg2022.dice_coeff(output, target).item()
 
         loss /= len(test_loader)  # loss function already averages over batch size
         dice /= len(test_loader)
@@ -190,11 +196,16 @@ def main():
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    model = ResVNet.ResVNet8()
-
     print('Using', torch.cuda.device_count(), 'GPU(s).')
-    model = nn.DataParallel(model)
-    model.load_state_dict(torch.load('vnet-pretrained.ckpt'))
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    model = ResVNet.ResVNet8().cuda()
+    
+    # model = nn.DataParallel(model)
+    # model.load_state_dict(torch.load(pretrained_model_dir))
+    checkpoint = torch.load(pretrained_model_dir)
+    # for key,value in checkpoint.items():
+    #     print(key)
+    model.load_state_dict({k.replace('module.',''):v for k,v in checkpoint.items()})
 
     check_dir(output_dir)
 
@@ -207,13 +218,13 @@ def main():
 #    optimizer = optim.RMSprop(model.parameters(), weight_decay=1e-8)
 
     #    print('Preparing training data...')
-    train_dataset = AtriaSeg2018.Dataset(train_paths, train_mode, transform=is_use_daug,
+    train_dataset = AtriaSeg2022.Dataset(train_paths, train_mode, transform=is_use_daug,
                                          normalization=is_use_normalization)
     train_loader = tdata.DataLoader(train_dataset, num_workers=num_workers, batch_size=batch_size, shuffle=True,
                                     worker_init_fn=_init_fn)
 
     #    print('Preparing testing data...')
-    test_dataset = AtriaSeg2018.Dataset(test_paths, train_mode, transform=False,
+    test_dataset = AtriaSeg2022.Dataset(test_paths, train_mode, transform=False,
                                         normalization=is_use_normalization)
     test_loader = tdata.DataLoader(test_dataset, num_workers=num_workers, batch_size=batch_size, shuffle=False,
                                    worker_init_fn=_init_fn)

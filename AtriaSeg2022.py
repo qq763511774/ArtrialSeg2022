@@ -1,4 +1,5 @@
 from __future__ import division
+# from asyncio import exceptions
 import os
 import torch.utils.data as data
 import torch
@@ -17,7 +18,7 @@ from skimage.exposure import rescale_intensity
 
 
 # bounding box size
-bbox_size = (240, 160, 96)
+bbox_size = (240, 160, 96) # max:209 128 73
 
 NR_OF_GREY = 2 ** 14  # number of grayscale levels to use in CLAHE algorithm
 
@@ -168,9 +169,10 @@ class Dataset(data.Dataset):
         # (144, 144, 48), (160,160,48), (144,144,70)
         volume_data = volume_data.reshape(1, volume_data.shape[0], volume_data.shape[1], volume_data.shape[2])
         volume_data = np.float32(volume_data)
-
-        print(' volume data:',volume, '; shape', volume_data.shape)
-        print(' mask data:',mask, '; shape', mask_data.shape)
+        mask_data = np.uint8(mask_data)
+        # print(' volume data:',volume, '; shape', volume_data.shape)
+        # print(' mask data:',mask, '; shape', mask_data.shape)
+        # print(volume_data.dtype,mask_data.dtype)
         return volume_data, mask_data
 
     def __len__(self):
@@ -386,7 +388,7 @@ def load_niigz_low(full_path_filename, is_origin=True, is_downsample=False, is_b
     if volume_data.shape[2] == 88:
         volume_data = np.pad(volume_data, ((0, 0), (0, 0), (4, 4)), 'constant')
 
-    # down-sample, ratio = (0.125, 0.125, 0.25) 144 144 48, 72 72 24,
+    # down-sample, ratio = (0.125, 0.125, 0.25) -> 72 72 24,
     if is_downsample:
         volume_data = volume_data[::8, ::8, ::4]
 
@@ -399,7 +401,7 @@ def load_niigz_low(full_path_filename, is_origin=True, is_downsample=False, is_b
 def load_niigz(full_path_filename, is_origin=True, is_downsample=False, is_binary=False):
     volume_data = sitk.ReadImage(full_path_filename)
     volume_data = sitk.GetArrayFromImage(volume_data)
-
+    
     # exchange the first and last axis
     # (88, 576, 576) -> (576, 576, 88), (88, 640, 640) -> (640, 640, 88)
     volume_data = volume_data.swapaxes(0, 2)
@@ -812,9 +814,10 @@ def equalize_adapthist_3d(image, kernel_size=None,
     .. [1] http://tog.acm.org/resources/GraphicsGems/
     .. [2] https://en.wikipedia.org/wiki/CLAHE#CLAHE
     """
+    # print('1',image.dtype)
     image = img_as_uint(image)
+    # print('2',image.dtype)
     image = rescale_intensity(image, out_range=(0, NR_OF_GREY - 1))
-
     if kernel_size is None:
         kernel_size = tuple([image.shape[dim] // 8 for dim in range(image.ndim)])
     elif isinstance(kernel_size, numbers.Number):
@@ -823,9 +826,11 @@ def equalize_adapthist_3d(image, kernel_size=None,
         ValueError('Incorrect value of `kernel_size`: {}'.format(kernel_size))
 
     kernel_size = [int(k) for k in kernel_size]
-
-    image = _clahe(image, kernel_size, clip_limit * nbins, nbins)
+    # print('3',image.dtype)
+    image = _clahe(image.astype('uint8'), kernel_size, clip_limit * nbins, nbins)
+    # print('4',image.dtype)
     image = img_as_float(image)
+    # print('5',image.dtype)
     return rescale_intensity(image)
 
 
