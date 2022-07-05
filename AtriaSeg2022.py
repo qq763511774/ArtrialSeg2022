@@ -18,7 +18,7 @@ from skimage.exposure import rescale_intensity
 
 
 # bounding box size
-bbox_size = (240, 160, 96) # max:209 128 73
+bbox_size = (352,208,48) #  (337,198,46)
 
 NR_OF_GREY = 2 ** 14  # number of grayscale levels to use in CLAHE algorithm
 
@@ -54,8 +54,8 @@ class Dataset(data.Dataset):
         self.centers = centers
 
         # MRI volume and mask file name
-        volume_file_name = 'enhanced.nii.gz'
-        mask_file_name = 'atriumSegImgMO.nii.gz'
+        volume_file_name = 'enhanced_resampled.nii.gz'
+        mask_file_name = 'atriumSegImgMO_resampled.nii.gz'
 
         # init folder names with empty set
         volumes, masks = [], []
@@ -155,6 +155,7 @@ class Dataset(data.Dataset):
                 #                volume_data = (volume_data - mean) / std
 
                 volume_data = equalize_adapthist_3d(volume_data / np.max(volume_data))
+                volume_data = volume_data / np.max(volume_data)
 
                 mean = np.mean(volume_data)
                 std = np.std(volume_data)
@@ -398,33 +399,37 @@ def load_niigz_low(full_path_filename, is_origin=True, is_downsample=False, is_b
 
     return volume_data
 
+#  1024,1024,96
 def load_niigz(full_path_filename, is_origin=True, is_downsample=False, is_binary=False):
     volume_data = sitk.ReadImage(full_path_filename)
     volume_data = sitk.GetArrayFromImage(volume_data)
-    
+    print(full_path_filename)
+
     # exchange the first and last axis
     # (88, 576, 576) -> (576, 576, 88), (88, 640, 640) -> (640, 640, 88)
     volume_data = volume_data.swapaxes(0, 2)
-    #        print(volume_data.shape)
 
     if is_origin:
         if is_binary:
             volume_data[volume_data.nonzero()] = 1
         return volume_data
 
-    # crop (640, 640,) to (576, 576,)  origin:576 576 44, 576 576 88, 640 640 44, 640 640 88
+    # 640,576,1024,922; 55,44
+    if volume_data.shape[0] == 576:
+        volume_data = np.pad(volume_data, ((224,224),(224,224),(0,0)),'constant')
+
     if volume_data.shape[0] == 640:
-        volume_data = volume_data[32:608, 32:608, :]
+        volume_data = np.pad(volume_data, ((192,192),(192,192),(0,0)),'constant')
+    
+    if volume_data.shape[0] == 922:
+        volume_data = np.pad(volume_data, ((51,51),(51,51),(0,0)),'constant')
 
-    # pad (, 44) to (, 96)
     if volume_data.shape[2] == 44:
-        volume_data = np.pad(volume_data, ((0, 0), (0, 0), (26, 26)), 'constant')
+        volume_data = np.pad(volume_data, ((0, 0), (0, 0), (10,10)), 'constant')
 
-    # pad (, 88) to (, 96)
-    if volume_data.shape[2] == 88:
-        volume_data = np.pad(volume_data, ((0, 0), (0, 0), (4, 4)), 'constant')
+    if volume_data.shape[2] == 55:
+        volume_data = np.pad(volume_data, ((0, 0), (0, 0), (20,21)), 'constant')
 
-    # down-sample, ratio = (0.25, 0.25, 0.5) 144 144 48, 72 72 24,
     if is_downsample:
         volume_data = volume_data[::4, ::4, ::2]
 
@@ -433,6 +438,7 @@ def load_niigz(full_path_filename, is_origin=True, is_downsample=False, is_binar
         volume_data[volume_data.nonzero()] = 1
 
     return volume_data
+
 
 def load_nrrd13(full_path_filename, is_binary=False):
 
@@ -817,7 +823,7 @@ def equalize_adapthist_3d(image, kernel_size=None,
     # print('1',image.dtype)
     image = img_as_uint(image)
     # print('2',image.dtype)
-    image = rescale_intensity(image, out_range=(0, NR_OF_GREY - 1))
+    image = rescale_intensity(image, out_range=(0, NR_OF_GREY - 1)).astype(np.uint16)
     if kernel_size is None:
         kernel_size = tuple([image.shape[dim] // 8 for dim in range(image.ndim)])
     elif isinstance(kernel_size, numbers.Number):
@@ -827,7 +833,7 @@ def equalize_adapthist_3d(image, kernel_size=None,
 
     kernel_size = [int(k) for k in kernel_size]
     # print('3',image.dtype)
-    image = _clahe(image.astype('uint8'), kernel_size, clip_limit * nbins, nbins)
+    image = _clahe(image, kernel_size, clip_limit * nbins, nbins)
     # print('4',image.dtype)
     image = img_as_float(image)
     # print('5',image.dtype)
@@ -1067,3 +1073,40 @@ def interpolate(image, slices, maps, lut):
     new = (new / norm).astype(view.dtype)
     view[::] = new
     return image
+
+
+def _my_3d_clahe(image):
+    # require ordinary image: ndarray, not normalized
+    im_orig = image  # grab just the nuclei
+
+    # Reorder axis order from (z, y, x) to (x, y, z)
+    im_orig = im_orig.transpose()
+
+    # Rescale image data to range [0, 1]
+    im_orig = np.clip(im_orig,
+                    np.percentile(im_orig, 5),
+                    np.percentile(im_orig, 95))
+    im_orig = (im_orig - im_orig.min()) / (im_orig.max() - im_orig.min())
+
+    # Degrade image by applying exponential intensity decay along x
+    sigmoid = np.exp(-3 * np.linspace(0, 1, im_orig.shape[0]))
+    im_degraded = (im_orig.T * sigmoid).T
+
+    # Set parameters for AHE
+    # Determine kernel sizes in each dim relative to image shape
+    kernel_size = (im_orig.shape[0] // 5,
+                im_orig.shape[1] // 5,
+                im_orig.shape[2] // 2)
+    kernel_size = np.array(kernel_size)
+    clip_limit = 0.9
+
+    # Perform histogram equalization
+    im_orig_he, im_degraded_he = \
+        [exposure.equalize_hist(im)
+        for im in [im_orig, im_degraded]]
+
+    im_orig_ahe, im_degraded_ahe = \
+        [exposure.equalize_adapthist(im,
+                                    kernel_size=kernel_size,
+                                    clip_limit=clip_limit)
+        for im in [im_orig, im_degraded]]

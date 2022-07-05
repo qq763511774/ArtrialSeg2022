@@ -30,10 +30,10 @@ device = torch.device("cuda" if use_cuda else "cpu")
 # ----------Parameters-------------
 
 # k-fold data set validation
-fold_K = 1
+fold_K = 3
 
 # number of processors for data processing
-num_workers = 4
+num_workers = 2
 
 # training epochs 
 epochs = 200
@@ -48,13 +48,13 @@ train_mode = 2
 seed = 0
 
 # input data dir
-data_dir = 'D:/Datasets/AtriaSeg/task2/train_data'
+data_dir = '/home/bob/Datasets/AtriaSeg/task2/train_data'
 
 # model 1 dir
-pretrained_model_dir = './Out1/vnet-mode1-fold1.ckpt'
+#pretrained_model_dir = './Out1/vnet-mode1-fold1.ckpt'
 
 # output dir
-output_dir = 'Out1'
+output_dir = 'Out7-4'
 
 # use data augmentation
 is_use_daug = True
@@ -123,7 +123,7 @@ def toc(start):
 
 
 def train(epoch, model, train_loader, optimizer, fwriter):
-
+ 
     model.train()
     n_processed = 0
     n_train = len(train_loader.dataset)
@@ -198,14 +198,7 @@ def main():
 
     print('Using', torch.cuda.device_count(), 'GPU(s).')
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-    model = ResVNet.ResVNet8().cuda()
-    
-    # model = nn.DataParallel(model)
-    # model.load_state_dict(torch.load(pretrained_model_dir))
-    checkpoint = torch.load(pretrained_model_dir)
-    # for key,value in checkpoint.items():
-    #     print(key)
-    model.load_state_dict({k.replace('module.',''):v for k,v in checkpoint.items()})
+    model = ResVNet.ResVNetSE().cuda()
 
     check_dir(output_dir)
 
@@ -244,6 +237,8 @@ def main():
             max_dice = dice
         test_time += toc(start)
 #        scheduler.step()
+        if epoch%10 == 9:
+            torch.save(model.state_dict(), output_dir + '/vnet-mode{}-fold{}-autosave.ckpt'.format(train_mode, fold_K))
         print('Train time accumulated: {:.2f}s, Test time accumulated: {:.2f}s\n'.format(train_time, test_time))
     # Save the model checkpoint
     torch.save(model.state_dict(), output_dir + '/vnet-mode{}-fold{}-final.ckpt'.format(train_mode, fold_K))

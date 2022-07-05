@@ -18,7 +18,6 @@ class SingleLayer(nn.Module):
             out = F.dropout(out, p=self.drop_rate)
         return out
 
-
 class ResBlock(nn.Module):
     def __init__(self, num_features, num_layers, drop_rate=0, dilation_rate=1):
         super(ResBlock, self).__init__()
@@ -85,6 +84,24 @@ class Input(nn.Module):
         out = self.relu(torch.add(out, x16))
         return out
 
+
+class Inputn(nn.Module):
+    def __init__(self, num_out_features):
+        super(Inputn, self).__init__()
+        self.conv = nn.Conv3d(1, num_out_features, kernel_size=5, padding=2, bias=False)
+        self.bn = nn.BatchNorm3d(num_out_features)
+        self.relu = nn.PReLU(num_out_features)
+        self.num_out_features = num_out_features
+
+    def forward(self, x):
+        out = self.bn(self.conv(x))
+        # split input in to 16 channels
+        xn = []
+        for i in range(self.num_out_features):
+            xn.append(x)
+        xn = torch.cat(xn, 1)
+        out = self.relu(torch.add(out, xn))
+        return out
 
 class Input8(nn.Module):
     def __init__(self, num_out_features):
@@ -318,6 +335,70 @@ class ResVNet_DeepSup(nn.Module):
 
         return supout7, supout6, supout5, supout4, supout3, supout2, supout1, out
 
+
+class ResVNetn(nn.Module): #  default 6features
+    def __init__(self, num_init_features=6, nlayers=[2, 3, 3, 3, 3, 3, 2, 1]):
+        super(ResVNetn, self).__init__()
+
+        self.input = Inputn(num_init_features)
+
+        self.down1 = DownTrans(num_init_features, num_init_features*2)
+        self.resdown1 = ResBlock(num_init_features*2, nlayers[0])
+
+        self.down2 = DownTrans(num_init_features*2, num_init_features*4)
+        self.resdown2 = ResBlock(num_init_features*4, nlayers[1])
+
+        self.down3 = DownTrans(num_init_features*4, num_init_features*8, drop_rate=0.2)
+        self.resdown3 = ResBlock(num_init_features*8, nlayers[2], drop_rate=0.2)
+
+        self.down4 = DownTrans(num_init_features*8, num_init_features*16, drop_rate=0.2)
+        self.resdown4 = ResBlock(num_init_features*16, nlayers[3], drop_rate=0.2)
+
+        self.up4 = UpTrans(num_init_features*16, num_init_features*16, drop_rate=0.2)
+        self.resup4 = ResBlock(num_init_features*16, nlayers[4], drop_rate=0.2)
+
+        self.up3 = UpTrans(num_init_features*16, num_init_features*8, drop_rate=0.2)
+        self.resup3 = ResBlock(num_init_features*8, nlayers[5], drop_rate=0.2)
+
+        self.up2 = UpTrans(num_init_features*8, num_init_features*4)
+        self.resup2 = ResBlock(num_init_features*4, nlayers[6])
+
+        self.up1 = UpTrans(num_init_features*4, num_init_features*2)
+        self.resup1 = ResBlock(num_init_features*2, nlayers[7])
+
+        self.output = Output(num_init_features*2)
+
+    def forward(self, x):
+
+        input = self.input(x)
+
+        down1 = self.down1(input)
+        resdown1 = self.resdown1(down1)
+
+        down2 = self.down2(resdown1)
+        resdown2 = self.resdown2(down2)
+
+        down3 = self.down3(resdown2)
+        resdown3 = self.resdown3(down3)
+
+        down4 = self.down4(resdown3)
+        resdown4 = self.resdown4(down4)
+
+        up4 = self.up4(resdown4, resdown3)
+        resup4 = self.resup4(up4)
+
+        up3 = self.up3(resup4, resdown2)
+        resup3 = self.resup3(up3)
+
+        up2 = self.up2(resup3, resdown1)
+        resup2 = self.resup2(up2)
+
+        up1 = self.up1(resup2, input)
+        resup1 = self.resup1(up1)
+
+        out = self.output(resup1)
+
+        return out
 
 class ResVNet8(nn.Module):
     def __init__(self, num_init_features=8, nlayers=[2, 3, 3, 3, 3, 3, 2, 1]):
@@ -1019,3 +1100,123 @@ class ResVNet_GCN_CAB(nn.Module):
         out = self.output(resup1)
 
         return out
+
+
+class ChannelSELayer3D(nn.Module):
+    """
+    3D extension of Squeeze-and-Excitation (SE) block described in:
+        *Hu et al., Squeeze-and-Excitation Networks, arXiv:1709.01507*
+        *Zhu et al., AnatomyNet, arXiv:arXiv:1808.05238*
+    """
+
+    def __init__(self, num_channels, reduction_ratio=2):
+        """
+        :param num_channels: No of input channels
+        :param reduction_ratio: By how much should the num_channels should be reduced
+        """
+        super(ChannelSELayer3D, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool3d(1)
+        num_channels_reduced = num_channels // reduction_ratio
+        self.reduction_ratio = reduction_ratio
+        self.fc1 = nn.Linear(num_channels, num_channels_reduced, bias=True)
+        self.fc2 = nn.Linear(num_channels_reduced, num_channels, bias=True)
+        self.relu = nn.ReLU()
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, input_tensor):
+        """
+        :param input_tensor: X, shape = (batch_size, num_channels, D, H, W)
+        :return: output tensor
+        """
+        batch_size, num_channels, D, H, W = input_tensor.size()
+        # Average along each channel
+        squeeze_tensor = self.avg_pool(input_tensor)
+
+        # channel excitation
+        fc_out_1 = self.relu(self.fc1(squeeze_tensor.view(batch_size, num_channels)))
+        fc_out_2 = self.sigmoid(self.fc2(fc_out_1))
+
+        output_tensor = torch.mul(input_tensor, fc_out_2.view(batch_size, num_channels, 1, 1, 1))
+
+        return output_tensor
+
+class ResSEBlock(nn.Module):
+    def __init__(self, num_features, num_layers, drop_rate=0, dilation_rate=1):
+        super(ResSEBlock, self).__init__()
+        layers = []
+        for i in range(int(num_layers)):
+            layers.append(SingleLayer(num_features, drop_rate, dilation_rate=dilation_rate))
+        layers.append(ChannelSELayer3D(num_features))
+        self.layers = nn.Sequential(*layers)
+        self.relu = nn.PReLU(num_features)
+
+    def forward(self, x):
+        out = self.layers(x)
+        out = self.relu(torch.add(out, x))
+        return out
+
+class ResVNetSE(nn.Module): #  default 6features
+    def __init__(self, num_init_features=6, nlayers=[2, 3, 3, 3, 3, 3, 2, 1]):
+        super(ResVNetSE, self).__init__()
+
+        self.input = Inputn(num_init_features)
+
+        self.down1 = DownTrans(num_init_features, num_init_features*2)
+        self.resdown1 = ResSEBlock(num_init_features*2, nlayers[0])
+
+        self.down2 = DownTrans(num_init_features*2, num_init_features*4)
+        self.resdown2 = ResSEBlock(num_init_features*4, nlayers[1])
+
+        self.down3 = DownTrans(num_init_features*4, num_init_features*8, drop_rate=0.2)
+        self.resdown3 = ResSEBlock(num_init_features*8, nlayers[2], drop_rate=0.2)
+
+        self.down4 = DownTrans(num_init_features*8, num_init_features*16, drop_rate=0.2)
+        self.resdown4 = ResSEBlock(num_init_features*16, nlayers[3], drop_rate=0.2)
+
+        self.up4 = UpTrans(num_init_features*16, num_init_features*16, drop_rate=0.2)
+        self.resup4 = ResBlock(num_init_features*16, nlayers[4], drop_rate=0.2)
+
+        self.up3 = UpTrans(num_init_features*16, num_init_features*8, drop_rate=0.2)
+        self.resup3 = ResBlock(num_init_features*8, nlayers[5], drop_rate=0.2)
+
+        self.up2 = UpTrans(num_init_features*8, num_init_features*4)
+        self.resup2 = ResBlock(num_init_features*4, nlayers[6])
+
+        self.up1 = UpTrans(num_init_features*4, num_init_features*2)
+        self.resup1 = ResBlock(num_init_features*2, nlayers[7])
+
+        self.output = Output(num_init_features*2)
+
+    def forward(self, x):
+
+        input = self.input(x)
+
+        down1 = self.down1(input)
+        resdown1 = self.resdown1(down1)
+
+        down2 = self.down2(resdown1)
+        resdown2 = self.resdown2(down2)
+
+        down3 = self.down3(resdown2)
+        resdown3 = self.resdown3(down3)
+
+        down4 = self.down4(resdown3)
+        resdown4 = self.resdown4(down4)
+
+        up4 = self.up4(resdown4, resdown3)
+        resup4 = self.resup4(up4)
+
+        up3 = self.up3(resup4, resdown2)
+        resup3 = self.resup3(up3)
+
+        up2 = self.up2(resup3, resdown1)
+        resup2 = self.resup2(up2)
+
+        up1 = self.up1(resup2, input)
+        resup1 = self.resup1(up1)
+
+        out = self.output(resup1)
+
+        return out
+
+  
