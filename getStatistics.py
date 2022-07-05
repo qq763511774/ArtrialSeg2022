@@ -1,3 +1,4 @@
+#  test CLAHE and outputt the results
 import AtriaSeg2018
 import numpy as np
 import scipy.ndimage

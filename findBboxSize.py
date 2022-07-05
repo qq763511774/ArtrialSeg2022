@@ -3,7 +3,7 @@ import numpy as np
 import torch.utils.data as tdata
 import AtriaSeg2022
 
-data_dir = 'D:/Datasets/AtriaSeg/task2/train_data'
+data_dir = '/home/bob/Datasets/AtriaSeg/task2/train_data'
 
 def get_item(mask_path):
     mask = mask_path
@@ -19,35 +19,37 @@ def findBorder(volume):
     l = [min(x),max(x),min(y),max(y),min(z),max(z)]
     return [l[1]-l[0],l[3]-l[2],l[5]-l[4]]
 
+#  1024,1024,96
 def load_niigz(full_path_filename, is_origin=True, is_downsample=False, is_binary=False):
-    try:
-        volume_data = sitk.ReadImage(full_path_filename)
-        volume_data = sitk.GetArrayFromImage(volume_data)
-    except(BaseException):
-        print(full_path_filename)
+    volume_data = sitk.ReadImage(full_path_filename)
+    volume_data = sitk.GetArrayFromImage(volume_data)
+    print(full_path_filename)
+
     # exchange the first and last axis
     # (88, 576, 576) -> (576, 576, 88), (88, 640, 640) -> (640, 640, 88)
     volume_data = volume_data.swapaxes(0, 2)
-    #        print(volume_data.shape)
 
     if is_origin:
         if is_binary:
             volume_data[volume_data.nonzero()] = 1
         return volume_data
 
-    # crop (640, 640,) to (576, 576,)  origin:576 576 44, 576 576 88, 640 640 44, 640 640 88
+    # 640,576,1024,922; 55,44
+    if volume_data.shape[0] == 576:
+        volume_data = np.pad(volume_data, ((224,224),(224,224),(0,0)),'constant')
+
     if volume_data.shape[0] == 640:
-        volume_data = volume_data[32:608, 32:608, :]
+        volume_data = np.pad(volume_data, ((192,192),(192,192),(0,0)),'constant')
+    
+    if volume_data.shape[0] == 922:
+        volume_data = np.pad(volume_data, ((51,51),(51,51),(0,0)),'constant')
 
-    # pad (, 44) to (, 96)
     if volume_data.shape[2] == 44:
-        volume_data = np.pad(volume_data, ((0, 0), (0, 0), (26, 26)), 'constant')
+        volume_data = np.pad(volume_data, ((0, 0), (0, 0), (52,52)), 'constant')
 
-    # pad (, 88) to (, 96)
-    if volume_data.shape[2] == 88:
-        volume_data = np.pad(volume_data, ((0, 0), (0, 0), (4, 4)), 'constant')
+    if volume_data.shape[2] == 55:
+        volume_data = np.pad(volume_data, ((0, 0), (0, 0), (42, 42)), 'constant')
 
-    # down-sample, ratio = (0.25, 0.25, 0.5) 144 144 48, 72 72 24,
     if is_downsample:
         volume_data = volume_data[::4, ::4, ::2]
 
@@ -59,8 +61,8 @@ def load_niigz(full_path_filename, is_origin=True, is_downsample=False, is_binar
 
 
 if __name__ == '__main__':
-    volume_file_name = 'enhanced.nii.gz'
-    mask_file_name = 'atriumSegImgMO.nii.gz'
+    volume_file_name = 'enhanced_resampled.nii.gz'
+    mask_file_name = 'atriumSegImgMO_resampled.nii.gz'
     volumes, masks = [], []
     All_paths = np.array(AtriaSeg2022.get_all_paths(data_dir))
     # paths is a list of full path
