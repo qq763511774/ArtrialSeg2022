@@ -1,4 +1,5 @@
 *.jpg
+paper
 *.ckpt
 *.ipynb
 *.zip
