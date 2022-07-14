@@ -1,0 +1,29 @@
+#+title: Introduction
+
+
+* Abstract
+Medical images that comes from different modalities including X-ray, computed tomography(CT), and magnetic resonance imaging(MRI) performs critical roles in diagnosing and making medical decisions in modern medical caring process. With the arise of artificial intelligence, image processing techniques and the explosion of hash rate, computational analysis of medical images is gaining affinity from researchers. Given that the speed traditional computer image processing methods shown are not satisfied, we developed an image segmentation method based on VNet, whose performance surpass baseline methods(85% acc) within limited time.
+* Introduction
+** AF is critical
+** MRI is good
+** GE-MRI is better MRI
+** benchmark reach 93% dice(2020)
+** issue with multi-modality, lightweight, and robusty yet to be addressed
+** related work:
+*** CNNs
+CNNs are able to produce image representations that capture hierarchical patterns and attain global theo- retical receptive field
+
+*** U-Net
+U-Net [1], which consists of a contracting path to capture context and a symmetric expanding path that enables precise localization and can be trained end-to-end from very few images built upon the famous Fully Convolutional Net- work (FCN)
+*** V-Net
+learn a residual function in- spired by [6] which ensures convergence in less training time and achieves good segmentation accuracy
+*** VGGNet
+VGGNet (Simonyan and Zisserman 2014) has been widely used for developing full convolutional networks (Long, Shelhamer and Darrell 2015, Noh, Hong and Han 2015) for semantic segmentation due to its simplicity, and adaptations of superior architectures, such as ResNet and Inception (Szegedy et al. 2017), are currently the state-of-the-art in the field
+*** ResNet
+*** SE-block
+
+** our architecture
+SE-VNet
+
+* References
+[1] Ronneberger, O., Fischer, P., Brox, T.: U-net: Convolutional networks for biomedi- cal image segmentation. In: International Conference on Medical image computing and computer-assisted intervention. pp. 234–241. Springer (2015)
