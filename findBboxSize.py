@@ -3,7 +3,7 @@ import numpy as np
 import torch.utils.data as tdata
 import AtriaSeg2022
 
-data_dir = '/home/bob/Datasets/AtriaSeg/task2/train_data'
+data_dir = AtriaSeg2022.DI.TRAIN_DATA_DIR
 
 def get_item(mask_path):
     mask = mask_path
@@ -35,20 +35,14 @@ def load_niigz(full_path_filename, is_origin=True, is_downsample=False, is_binar
         return volume_data
 
     # 640,576,1024,922; 55,44
-    if volume_data.shape[0] == 576:
-        volume_data = np.pad(volume_data, ((224,224),(224,224),(0,0)),'constant')
+    if volume_data.shape[0] != max(AtriaSeg2022.DI.SIZE12):
+        half_pad = abs(volume_data.shape[0] - 800) // 2
+        volume_data = np.pad(volume_data, ((half_pad,half_pad),(half_pad,half_pad),(0,0)),'constant')
 
-    if volume_data.shape[0] == 640:
-        volume_data = np.pad(volume_data, ((192,192),(192,192),(0,0)),'constant')
-    
-    if volume_data.shape[0] == 922:
-        volume_data = np.pad(volume_data, ((51,51),(51,51),(0,0)),'constant')
+    if volume_data.shape[2] != max(AtriaSeg2022.DI.SIZE3):
+        half_pad = abs(volume_data.shape[2] - 80) // 2
+        volume_data = np.pad(volume_data, ((0,0),(0,0),(half_pad,half_pad)),'constant')
 
-    if volume_data.shape[2] == 44:
-        volume_data = np.pad(volume_data, ((0, 0), (0, 0), (52,52)), 'constant')
-
-    if volume_data.shape[2] == 55:
-        volume_data = np.pad(volume_data, ((0, 0), (0, 0), (42, 42)), 'constant')
 
     if is_downsample:
         volume_data = volume_data[::4, ::4, ::2]
@@ -56,6 +50,8 @@ def load_niigz(full_path_filename, is_origin=True, is_downsample=False, is_binar
     # make the mask binary
     if is_binary:
         volume_data[volume_data.nonzero()] = 1
+
+    #  print(volume_data.shape)
 
     return volume_data
 

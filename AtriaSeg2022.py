@@ -15,10 +15,13 @@ from scipy.ndimage.interpolation import zoom
 from scipy.ndimage.filters import gaussian_filter
 from skimage.util import img_as_float, img_as_uint
 from skimage.exposure import rescale_intensity
-
+import DATA_INFO as DI
+from math import sqrt
+from skimage.feature import blob_dog, blob_log, blob_doh
+from skimage.color import rgb2gray
 
 # bounding box size
-bbox_size = (352,208,48) #  (337,198,46)
+bbox_size = DI.BBOX_SIZE 
 
 NR_OF_GREY = 2 ** 14  # number of grayscale levels to use in CLAHE algorithm
 
@@ -29,7 +32,7 @@ def get_all_paths(root):
     dirs.sort()
     for folder in dirs:
         if not folder.startswith('.'):  # skip hidden folders
-            path = root + '/' + folder
+            path = root + folder
             paths.append(path)
     return paths
 
@@ -399,14 +402,11 @@ def load_niigz_low(full_path_filename, is_origin=True, is_downsample=False, is_b
 
     return volume_data
 
-#  1024,1024,96
+
 def load_niigz(full_path_filename, is_origin=True, is_downsample=False, is_binary=False):
     volume_data = sitk.ReadImage(full_path_filename)
     volume_data = sitk.GetArrayFromImage(volume_data)
-    print(full_path_filename)
-
-    # exchange the first and last axis
-    # (88, 576, 576) -> (576, 576, 88), (88, 640, 640) -> (640, 640, 88)
+    # print(full_path_filename)
     volume_data = volume_data.swapaxes(0, 2)
 
     if is_origin:
@@ -415,20 +415,12 @@ def load_niigz(full_path_filename, is_origin=True, is_downsample=False, is_binar
         return volume_data
 
     # 640,576,1024,922; 55,44
-    if volume_data.shape[0] == 576:
-        volume_data = np.pad(volume_data, ((224,224),(224,224),(0,0)),'constant')
-
-    if volume_data.shape[0] == 640:
-        volume_data = np.pad(volume_data, ((192,192),(192,192),(0,0)),'constant')
-    
-    if volume_data.shape[0] == 922:
-        volume_data = np.pad(volume_data, ((51,51),(51,51),(0,0)),'constant')
-
-    if volume_data.shape[2] == 44:
-        volume_data = np.pad(volume_data, ((0, 0), (0, 0), (10,10)), 'constant')
-
-    if volume_data.shape[2] == 55:
-        volume_data = np.pad(volume_data, ((0, 0), (0, 0), (20,21)), 'constant')
+    if volume_data.shape[0] != max(DI.SIZE12):
+        half_pad = abs(volume_data.shape[0] - max(DI.SIZE12)) // 2
+        volume_data = np.pad(volume_data, ((half_pad,half_pad),(half_pad,half_pad),(0,0)),'constant')
+    if volume_data.shape[2] != max(DI.SIZE3):
+        half_pad = abs(volume_data.shape[2] - max(DI.SIZE3)) // 2
+        volume_data = np.pad(volume_data, ((0,0),(0,0),(half_pad,half_pad)),'constant')
 
     if is_downsample:
         volume_data = volume_data[::4, ::4, ::2]
@@ -436,6 +428,7 @@ def load_niigz(full_path_filename, is_origin=True, is_downsample=False, is_binar
     # make the mask binary
     if is_binary:
         volume_data[volume_data.nonzero()] = 1
+    #  print(volume_data.shape)
 
     return volume_data
 
@@ -780,7 +773,7 @@ def random_flip_3d(volume, mask):
 """
 
 
-def equalize_adapthist_3d(image, kernel_size=None,
+def equalize_adapthist_3d(image, kernel_size=32,
                           clip_limit=0.01, nbins=256):
     """Contrast Limited Adaptive Histogram Equalization (CLAHE).
     An algorithm for local contrast enhancement, that uses histograms computed

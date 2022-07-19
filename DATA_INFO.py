@@ -1,0 +1,10 @@
+TRAIN_DATA_DIR = '/share/home/xiangshou/Datasets/AtriaSeg/task2/train_data/'
+TEST_DATA_DIR = '/share/home/xiangshou/Datasets/AtriaSeg/task2_val/'
+TRAIN_VOLUME_NAME = 'enhanced_resampled.nii.gz'
+TRAIN_MASK_NAME = 'atriumSegImgMO_resampled.nii.gz'
+TRAIN_DATA_NUM = 130
+TEST_DATA_NUM = 19
+BBOX_SIZE = (272,160,80) # 263 154 68
+NEW_SPACING = (0.8,0.8,1.375)
+SIZE12 = [800,720,500,450]
+SIZE3 = [64,64,80,80]

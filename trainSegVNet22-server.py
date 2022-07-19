@@ -3,7 +3,6 @@ import torch.utils.data as tdata
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-import scipy.ndimage
 import torch
 import time
 import random
@@ -11,7 +10,6 @@ import torch.nn.functional as F
 import ResVNet
 import AtriaSeg2022
 import warnings
-import sys
 warnings.filterwarnings("ignore")
 
 # ----------for clusters---------
@@ -51,13 +49,13 @@ train_mode = 2
 seed = 0
 
 # input data dir
-data_dir = '/home/bob/Datasets/AtriaSeg/task2/train_data'
+data_dir = AtriaSeg2022.DI.TRAIN_DATA_DIR
 
 # model 1 dir
 #pretrained_model_dir = './Out1/vnet-mode1-fold1.ckpt'
 
 # output dir
-output_dir = 'Out6-30'
+output_dir = 'Out7-18'
 
 # use data augmentation
 is_use_daug = True
@@ -94,10 +92,11 @@ test_paths = sorted_paths[test_idxs[fold_K]]
 train_paths = list(set(sorted_paths).difference(test_paths))
 train_paths.sort()
 
-if train_mode == 1:
-    fixed_size = (144, 144, 48)
-else:
-    fixed_size = (240, 160, 96)
+# if train_mode == 1:
+#     fixed_size = (144, 144, 48)
+# else:
+#     fixed_size = (240, 160, 96)
+fixed_size = AtriaSeg2022.DI.BBOX_SIZE
 
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.deterministic = True
@@ -200,8 +199,11 @@ def main():
     torch.manual_seed(seed)
 
     print('Using', torch.cuda.device_count(), 'GPU(s).')
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-    model = ResVNet.ResVNetSE().cuda()
+    model = ResVNet.ResVNetSE(num_init_features=16).cuda()
+    model = nn.DataParallel(model)
+    model = model.to(device)
+
+    model.apply(AtriaSeg2022.weights_init)
 
     check_dir(output_dir)
 
@@ -243,6 +245,7 @@ def main():
         if epoch%10 == 9:
             torch.save(model.state_dict(), output_dir + '/vnet-mode{}-fold{}-autosave.ckpt'.format(train_mode, fold_K))
         print('Train time accumulated: {:.2f}s, Test time accumulated: {:.2f}s\n'.format(train_time, test_time))
+        print('-------Max dice: {}--------'.format(max_dice))
     # Save the model checkpoint
     torch.save(model.state_dict(), output_dir + '/vnet-mode{}-fold{}-final.ckpt'.format(train_mode, fold_K))
 
